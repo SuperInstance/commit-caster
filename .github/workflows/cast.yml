@@ -1,0 +1,17 @@
+name: Commit Caster
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Every 15 minutes
+  workflow_dispatch:
+
+jobs:
+  cast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          watch-repos: 'SuperInstance/oracle1-vessel,Lucineer/JetsonClaw1-vessel,SuperInstance/babel-vessel,SuperInstance/iron-to-iron'
+          target-issue-repo: 'SuperInstance/oracle1-vessel'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          filter-prefix: '[I2I'

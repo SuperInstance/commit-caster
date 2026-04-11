@@ -1,0 +1,50 @@
+name: 'Commit Caster'
+description: 'Post I2I notifications when commits land on watched repos'
+branding:
+  icon: 'radio'
+  color: 'blue'
+inputs:
+  watch-repos:
+    description: 'Comma-separated list of repos to watch'
+    required: true
+  target-issue-repo:
+    description: 'Repo to post notification issues to'
+    required: true
+  github-token:
+    description: 'GitHub token with repo access'
+    required: true
+  filter-prefix:
+    description: 'Only notify on commits with this prefix (e.g. [I2I)'
+    required: false
+    default: '[I2I'
+
+runs:
+  using: 'composite'
+  steps:
+    - shell: bash
+      run: |
+        echo "Commit Caster: scanning watched repos for I2I messages"
+        REPOS="${{ inputs.watch-repos }}"
+        TARGET="${{ inputs.target-issue-repo }}"
+        TOKEN="${{ inputs.github-token }}"
+        PREFIX="${{ inputs.filter-prefix }}"
+        
+        for REPO in $(echo $REPOS | tr ',' ' '); do
+          echo "Scanning $REPO..."
+          # Get latest commits
+          COMMITS=$(curl -s -H "Authorization: token $TOKEN" \
+            "https://api.github.com/repos/$REPO/commits?per_page=5" | \
+            jq -r '.[] | select(.commit.message | startswith("'$PREFIX'")) | .sha + " " + .commit.message' 2>/dev/null)
+          
+          if [ -n "$COMMITS" ]; then
+            echo "Found I2I commits in $REPO"
+            # Post notification issue
+            BODY="**Source:** $REPO\n**Time:** $(date -u +%Y-%m-%dT%H:%M:%SZ)\n\n"
+            BODY+="\`\`\`\n$COMMITS\n\`\`\`"
+            
+            curl -s -H "Authorization: token $TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -X POST "https://api.github.com/repos/$TARGET/issues" \
+              -d "{\"title\":\"[I2I:BEACON] Activity on $REPO\",\"body\":\"$BODY\",\"labels\":[\"i2i\",\"beacon\"]}" | jq -r '.html_url // .message'
+          fi
+        done
